@@ -26,7 +26,8 @@ pub enum ClassMember {
 pub enum Operation {
   Plus(Atom),
   Multiply(Atom),
-  Question(Atom)
+  Question(Atom),
+  Invert(Atom)
 }
 
 fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
@@ -118,7 +119,8 @@ pub fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<
             Operator('+') => Ok((rest.to_vec(), Box::new(|x| Plus(x)))),
             Operator('*') => Ok((rest.to_vec(), Box::new(|x| Multiply(x)))),
             Operator('?') => Ok((rest.to_vec(), Box::new(|x| Question(x)))),
-            _ => Err("Lexeme not operation"),
+            Operator('^') => Ok((rest.to_vec(), Box::new(|x| Invert(x)))),
+            _ => Err("Lexeme is not an operation"),
         }
     } else {
         Err("Error parsing operation")

@@ -18,7 +18,7 @@ pub fn lex_class(s : &String) -> (Result<Vec<Lexemes>, &'static str>, String) {
 
     while let Some(c) = iterator.next() {
         match c {
-            '+' | '*' | '?' | '-' => result.push(Operator(c)),
+            '+' | '*' | '?' | '-' | '^' => result.push(Operator(c)),
             '(' => result.push(LRound),
             ')' => result.push(RRound),
             '[' => invalid = true,
@@ -75,7 +75,7 @@ pub fn lex(s : &String) -> Result<Vec<Lexemes>, &'static str> {
                 }
             }
             ']' => result.push(RSquare),
-            '+' | '*' | '?' | '-' => result.push(Operator(c)),
+            '+' | '*' | '?' | '-' | '^' => result.push(Operator(c)),
             '(' => result.push(LRound),
             ')' => result.push(RRound),
             '\\' => {
