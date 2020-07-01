@@ -47,7 +47,7 @@ fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassM
     }
 }
 
-pub fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
+fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
     if let Some((first, rest)) = lexemes.split_first() {
         match first {
             Char(c) => {
@@ -68,7 +68,7 @@ pub fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Clas
 }
 
 
-pub fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
+fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
     let mut ch_class = Vec::new();
     let mut tokens = lexemes;
 
@@ -96,7 +96,7 @@ pub fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, At
 }
 
 
-pub fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
+fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
     if let Some((lexeme, rest)) = lexemes.split_first() {
         match lexeme {
             LSquare => parse_character_class(rest.to_vec()),
@@ -113,7 +113,7 @@ pub fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'stat
     }
 }
 
-pub fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<dyn Fn(Atom) -> Operation + 'a>), &'static str> {
+fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<dyn Fn(Atom) -> Operation + 'a>), &'static str> {
     if let Some((first, rest)) = lexemes.split_first() {
         match first {
             Operator('+') => Ok((rest.to_vec(), Box::new(|x| Plus(x)))),
@@ -128,7 +128,7 @@ pub fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<
 }
 
 
-pub fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), &'static str> {
+fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), &'static str> {
     match lexemes.first() {
         Some(Operator(_)) => Err("No atom before Operator"),
         
@@ -147,7 +147,7 @@ pub fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), &'sta
     }
 }
 
-pub fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), &'static str> {
+fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), &'static str> {
     let mut expr = Vec::new();
     let mut tokens = lexemes;
     let mut invalid = false;

@@ -11,7 +11,7 @@ pub enum Lexemes {
     RRound,
 }
 
-pub fn lex_class(s : &String) -> (Result<Vec<Lexemes>, &'static str>, String) {
+fn lex_class(s : &String) -> (Result<Vec<Lexemes>, &'static str>, String) {
     let mut result = Vec::new();
     let mut iterator = s.chars();
     let mut invalid = false;
