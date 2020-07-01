@@ -1,9 +1,5 @@
-use crate::lexer::Lexemes;
-use crate::lexer::Lexemes::*;
-use crate::parser::ClassMember::*;
-use crate::parser::Atom::*;
-use crate::parser::Operation::*;
-use crate::parser::Node::*;
+use crate::lexer::{Lexemes, Lexemes::*};
+use crate::parser::{ClassMember::*, Atom::*, Operation::*, Node::*};
 
 type Expr = Vec<Node>;
 
@@ -33,26 +29,25 @@ pub enum Operation {
   Question(Atom)
 }
 
-fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), String> {
+fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
     if let Some((_, rest)) = lexemes.split_first() {
         if let Some((ch, rest)) = rest.split_first() {
-        
             match ch {
                 Char(d) => Ok((rest.to_vec(), Range(c, *d))),
-                _       => Err(String::from("invalid token syntax")),
+                _       => Err("invalid token syntax"),
             }
+
         } else {
-            Err(String::from("invalid token syntax"))
+            Err("invalid token syntax")
         }
     
     } else {
-        Err(String::from("invalid token syntax"))
+        Err("invalid token syntax")
     }
 }
 
-pub fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), String> {
+pub fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
     if let Some((first, rest)) = lexemes.split_first() {
-        
         match first {
             Char(c) => {
                 match lexemes.get(1) {
@@ -63,20 +58,18 @@ pub fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Clas
             }
             
             Meta(c) => Ok((rest.to_vec(), Ch(*c))),
-            _       => Err(String::from("Invalid class member")),
+            _       => Err("Invalid class member"),
         }
     
     } else {
-        Err(String::from("Lexemes are empty"))
+        Err("Lexemes are empty")
     }
 }
 
 
-pub fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), String> {
+pub fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
     let mut ch_class = Vec::new();
     let mut tokens = lexemes;
-    let mut invalid_tokens = false;
-    let mut error = String::from("");
 
     while let Some(first) = tokens.first() {
         match first {
@@ -91,103 +84,68 @@ pub fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, At
                 }
             }
             _       => {
-                match parse_class_member(&tokens) {
-                    Ok((rest, member)) => {
-                        ch_class.push(member);
-                        tokens = rest;
-                    
-                    }
-
-                    Err(err) => {
-                        invalid_tokens = true;
-                        error = err;
-                    }
-                } 
+                let (rest, member) = parse_class_member(&tokens)?; 
+                ch_class.push(member);
+                tokens = rest;        
             }
         }
     }
     
-    if invalid_tokens {
-        Err(error)
-    } else {
-        Ok((tokens, CharClass(ch_class)))
-    }
+    Ok((tokens, CharClass(ch_class)))
 }
 
 
-pub fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), String> {
+pub fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
     if let Some((lexeme, rest)) = lexemes.split_first() {
         match lexeme {
             LSquare => parse_character_class(rest.to_vec()),
             LRound  => {
-                if let Ok((rest, expr)) = parse_expression(rest.to_vec()) {
-                    Ok((rest, AtomExpr(expr)))
-                } else {
-                    Err(String::from("Error parsing sub-expression"))
-                }
+                let (rest, expr) = parse_expression(rest.to_vec())?;
+                Ok((rest, AtomExpr(expr)))
             }
             Char(c) => Ok((rest.to_vec(), AtomCh(*c))),
             Meta(c) => Ok((rest.to_vec(), AtomCh(*c))),
-            _       => Err(String::from("Lexeme is not an atom")),
+            _       => Err("Lexeme is not an atom"),
         }
     } else {
-        Err(String::from("No lexemes present"))
+        Err("No lexemes present")
     }
 }
 
-
-fn plus_atom(atom : Atom) -> Operation {
-    Plus(atom)
-}
-
-fn multiply_atom(atom : Atom) -> Operation {
-    Multiply(atom)
-}
-
-fn question_atom(atom : Atom) -> Operation {
-    Question(atom)
-}
-
-pub fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<dyn Fn(Atom) -> Operation + 'a>), String> {
-    
+pub fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<dyn Fn(Atom) -> Operation + 'a>), &'static str> {
     if let Some((first, rest)) = lexemes.split_first() {
         match first {
-            Operator('+') => Ok((rest.to_vec(), Box::new(move |x:Atom| plus_atom(x)))),
-            Operator('*') => Ok((rest.to_vec(), Box::new(move |x:Atom| multiply_atom(x)))),
-            Operator('?') => Ok((rest.to_vec(), Box::new(move |x:Atom| question_atom(x)))),
-            _ => Err(String::from("Lexeme not operation")),
+            Operator('+') => Ok((rest.to_vec(), Box::new(|x| Plus(x)))),
+            Operator('*') => Ok((rest.to_vec(), Box::new(|x| Multiply(x)))),
+            Operator('?') => Ok((rest.to_vec(), Box::new(|x| Question(x)))),
+            _ => Err("Lexeme not operation"),
         }
     } else {
-        Err(String::from("Error parsing operation"))
+        Err("Error parsing operation")
     }
 }
 
 
-pub fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), String> {
+pub fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), &'static str> {
     match lexemes.first() {
-        Some(Operator(_)) => Err(String::from("No atom before Operator")),
+        Some(Operator(_)) => Err("No atom before Operator"),
+        
         Some(_) => {
-            if let Ok((rest, atom)) = parse_atom(lexemes.to_vec()) {
-                match rest.first() {
-                    Some(Operator(_)) => {
-                        if let Ok((rest, op)) = parse_operation(rest) {
-                            Ok((rest, TOp(op(atom))))
-                        } else {
-                            Err(String::from("Error parsing operation"))
-                        }
-                    }
-                    
-                    _ => Ok((rest, TAtom(atom))),
+            let (rest, atom) = parse_atom(lexemes.to_vec())?;
+            match rest.first() {
+                Some(Operator(_)) => {
+                    let (rest, op) = parse_operation(rest)?;
+                    Ok((rest, TOp(op(atom))))
                 }
-            } else {
-                Err(String::from("Error parsing atom"))
+                _ => Ok((rest, TAtom(atom))),
             }
         }
-        None => Err(String::from("No lexemes present")),
+        
+        None => Err("No lexemes present"),
     }
 }
 
-pub fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), String> {
+pub fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), &'static str> {
     let mut expr = Vec::new();
     let mut tokens = lexemes;
     let mut invalid = false;
@@ -204,34 +162,27 @@ pub fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), 
                 }
             }
             _ => {
-                if let Ok((rest, node)) = parse_term(&tokens) {
-                    expr.push(node);
-                    tokens = rest.to_vec();
-                } else {
-                    invalid = true;
-                    break;
-                }
+                let (rest, node) = parse_term(&tokens)?;
+                expr.push(node);
+                tokens = rest.to_vec();
             }
         }
     }
 
     if invalid {
-        Err(String::from("Error processing lexemes"))
+        Err("Error processing lexemes")
     } else {
         Ok((tokens, expr))
     }
 }
 
 
-pub fn parse(lexemes : Vec<Lexemes>) -> Result<Expr, String> {
-    if let Ok((rest, expr)) = parse_expression(lexemes) {
-        if rest.is_empty() {
-            Ok(expr)
-        } else {
-            Err(String::from("Lexemes left over"))
-        }
+pub fn parse(lexemes : Vec<Lexemes>) -> Result<Expr, &'static str> {
+    let (rest, expr) = parse_expression(lexemes)?;
+    if rest.is_empty() {
+        Ok(expr)
     } else {
-        Err(String::from("Error parsing expression"))
+        Err("Lexemes left over")
     }
 }
 

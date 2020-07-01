@@ -11,7 +11,7 @@ pub enum Lexemes {
     RRound,
 }
 
-pub fn lex_class(s : &String) -> (Result<Vec<Lexemes>, String>, String) {
+pub fn lex_class(s : &String) -> (Result<Vec<Lexemes>, &'static str>, String) {
     let mut result = Vec::new();
     let mut iterator = s.chars();
     let mut invalid = false;
@@ -44,18 +44,18 @@ pub fn lex_class(s : &String) -> (Result<Vec<Lexemes>, String>, String) {
     }
     
     if invalid {
-        (Err(String::from("Invalid character class")), iterator.as_str().to_string())
+        (Err("Invalid character class"), iterator.as_str().to_string())
     } else {
         (Ok(result), iterator.as_str().to_string())
     }
 }
 
-pub fn lex(s : &String) -> Result<Vec<Lexemes>, String> {
+pub fn lex(s : &String) -> Result<Vec<Lexemes>, &'static str> {
     let mut result = Vec::new();
     let mut temp_str;
     let mut iter = s.chars();
     let mut invalid = false;
-    let mut error = String::from("");
+    let mut error = "";
 
     while let Some(c) = iter.next() {
         match c {
@@ -78,6 +78,21 @@ pub fn lex(s : &String) -> Result<Vec<Lexemes>, String> {
             '+' | '*' | '?' | '-' => result.push(Operator(c)),
             '(' => result.push(LRound),
             ')' => result.push(RRound),
+            '\\' => {
+                match iter.next() {
+                    Some(c) => {
+                        if "wbdsWBDS".contains(c) {
+                            result.push(Meta(c));
+                        } else {
+                            result.push(Char(c));
+                        }
+                    }
+                    None => {
+                        invalid = true;
+                        error = "Invalid meta character syntax";
+                    }
+                }
+            }
              _  => result.push(Char(c)),
         }
     }
