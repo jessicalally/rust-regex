@@ -15,23 +15,30 @@ fn lex_class(s : &String) -> (Result<Vec<Lexemes>, &'static str>, String) {
     let mut result = Vec::new();
     let mut iterator = s.chars();
     let mut invalid = false;
+    let mut inverted = false;
 
     while let Some(c) = iterator.next() {
         match c {
-            '+' | '*' | '?' | '-' | '^' => result.push(Operator(c)),
+            '+' | '*' | '?' | '-' => result.push(Operator(c)),
+            '^' => inverted = true,
             '(' => result.push(LRound),
             ')' => result.push(RRound),
             '[' => invalid = true,
             ']' => {
-                let mut rest = String::from("]");
-                rest.push_str(&iterator.as_str().to_string());
-                return (Ok(result), rest)
+                result.push(RSquare);
+                if inverted {
+                    result.push(Operator('^'));
+                }
+                break;
             }
             '\\' => {
                 match iterator.next() {
                     Some(c) => {
-                        if "wbdsWBDS".contains(c) {
+                        if ".wbds".contains(c) {
                             result.push(Meta(c));
+                        } else if "WBDS".contains(c) {
+                            result.push(Meta(c));
+                            result.push(Operator('^'));
                         } else {
                             result.push(Char(c));
                         }
@@ -74,8 +81,8 @@ pub fn lex(s : &String) -> Result<Vec<Lexemes>, &'static str> {
                     }
                 }
             }
-            ']' => result.push(RSquare),
-            '+' | '*' | '?' | '-' | '^' => result.push(Operator(c)),
+            ']' => panic!("Closing bracket without opening bracket"),
+            '+' | '*' | '?' | '-' => result.push(Operator(c)),
             '(' => result.push(LRound),
             ')' => result.push(RRound),
             '\\' => {
@@ -119,8 +126,8 @@ mod lexer_tests {
         assert_eq!(result, Ok(vec![Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z')]));
         
         let (result, rest) = lex_class(&String::from("A-Z_]world"));
-        assert_eq!(rest, "]world");
-        assert_eq!(result, Ok(vec![Char('A'), Operator('-'), Char('Z'), Char('_')]));
+        assert_eq!(rest, "world");
+        assert_eq!(result, Ok(vec![Char('A'), Operator('-'), Char('Z'), Char('_'), RSquare]));
     }
     
     #[test]

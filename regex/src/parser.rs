@@ -47,26 +47,36 @@ fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassM
     }
 }
 
-fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
+fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Vec<ClassMember>), &'static str> {
     if let Some((first, rest)) = lexemes.split_first() {
         match first {
             Char(c) => {
                 match lexemes.get(1) {
                     // character is part of a range
-                    Some(Operator('-')) => parse_range(*c, rest.to_vec()),
-                    _ => Ok((rest.to_vec(), Ch(*c))),
+                    Some(Operator('-')) => {
+                        let (rest, member) = parse_range(*c, rest.to_vec())?;
+                        return Ok((rest.to_vec(), vec![member]));
+                    }
+                    _ => Ok((rest.to_vec(), vec![Ch(*c)])),
                 }
             }
             
-            Meta(c) => Ok((rest.to_vec(), Ch(*c))),
+            Meta(c) => {
+                match c {
+                    '.' => Ok((rest.to_vec(), vec![Range('!', '~')])), 
+                    'b' => Ok((rest.to_vec(), vec![Ch('\n')])),
+                    's' => Ok((rest.to_vec(), vec![Ch(' '), Ch('\t')])),
+                    'w' => Ok((rest.to_vec(), vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9')])),
+                    'd' => Ok((rest.to_vec(), vec![Range('0', '9')])),
+                     _  => Err("Invalid meta character"),
+                }
+            }
             _       => Err("Invalid class member"),
         }
-    
     } else {
         Err("Lexemes are empty")
     }
 }
-
 
 fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
     let mut ch_class = Vec::new();
@@ -85,8 +95,8 @@ fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom),
                 }
             }
             _       => {
-                let (rest, member) = parse_class_member(&tokens)?; 
-                ch_class.push(member);
+                let (rest, mut member) = parse_class_member(&tokens)?; 
+                ch_class.append(&mut member);
                 tokens = rest;        
             }
         }
@@ -105,7 +115,16 @@ fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static s
                 Ok((rest, AtomExpr(expr)))
             }
             Char(c) => Ok((rest.to_vec(), AtomCh(*c))),
-            Meta(c) => Ok((rest.to_vec(), AtomCh(*c))),
+            Meta(c) => {
+                match c {
+                    '.' => Ok((rest.to_vec(), CharClass(vec![Range('!', '~')]))), 
+                    'b' => Ok((rest.to_vec(), CharClass(vec![Ch('\n')]))),
+                    's' => Ok((rest.to_vec(), CharClass(vec![Ch(' '), Ch('\t')]))),
+                    'w' => Ok((rest.to_vec(), CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9')]))),
+                    'd' => Ok((rest.to_vec(), CharClass(vec![Range('0', '9')]))),
+                     _  => Err("Invalid meta character"),
+                }
+            }
             _       => Err("Lexeme is not an atom"),
         }
     } else {
@@ -197,14 +216,14 @@ mod parser_tests {
     fn test_parse_class_member() {
         if let Ok((rest, result)) = parse_class_member(&vec![Char('a'), Char('b')]) {
             assert_eq!(false, rest.is_empty());
-            assert_eq!(result, Ch('a'));
+            assert_eq!(result, vec![Ch('a')]);
         } else {
             assert!(false);
         }
         
         if let Ok((rest, result)) = parse_class_member(&vec![Char('A'), Operator('-'), Char('Z')]) {
             assert_eq!(true, rest.is_empty());
-            assert_eq!(result, Range('A', 'Z'));
+            assert_eq!(result, vec![Range('A', 'Z')]);
         } else {
             assert!(false);
         }
@@ -294,9 +313,9 @@ mod parser_tests {
             assert!(false);
         }
         
-        if let Ok(lexed) = lex(&String::from("(mailto:)?[\\w\\-.]+'[\\w\\-]+(.[A-Za-z]+)+")) {
+        if let Ok(lexed) = lex(&String::from("(mailto:)?[\\w\\-\\.]+'[\\w\\-]+(.[A-Za-z]+)+")) {
             if let Ok(result) = parse(lexed) {
-                assert_eq!(result, vec![TOp(Question(AtomExpr(vec![TAtom(AtomCh('m')), TAtom(AtomCh('a')), TAtom(AtomCh('i')), TAtom(AtomCh('l')), TAtom(AtomCh('t')), TAtom(AtomCh('o')), TAtom(AtomCh(':'))]))), TOp(Plus(CharClass(vec![Ch('w'), Ch('-'), Ch('.')]))), TAtom(AtomCh('\'')), TOp(Plus(CharClass(vec![Ch('w'), Ch('-')]))), TOp(Plus(AtomExpr(vec![TAtom(AtomCh('.')), TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))])))]);
+                assert_eq!(result, vec![TOp(Question(AtomExpr(vec![TAtom(AtomCh('m')), TAtom(AtomCh('a')), TAtom(AtomCh('i')), TAtom(AtomCh('l')), TAtom(AtomCh('t')), TAtom(AtomCh('o')), TAtom(AtomCh(':'))]))), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-'), Range('!', '~')]))), TAtom(AtomCh('\'')), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-')]))), TOp(Plus(AtomExpr(vec![TAtom(AtomCh('.')), TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))])))]);
             } else {
                 assert!(false);
             }
