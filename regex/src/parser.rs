@@ -1,28 +1,28 @@
 use crate::lexer::{Lexemes, Lexemes::*};
 use crate::parser::{ClassMember::*, Atom::*, Operation::*, Node::*};
 
-type Expr = Vec<Node>;
+pub type Expr = Vec<Node>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Node {
     TAtom(Atom),
     TOp(Operation)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Atom {
     AtomExpr(Expr),
     AtomCh(char),
     CharClass(Vec<ClassMember>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ClassMember {
     Ch(char),
     Range(char, char)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operation {
   Plus(Atom),
   Multiply(Atom),
