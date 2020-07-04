@@ -214,113 +214,68 @@ mod parser_tests {
     
     #[test]
     fn test_parse_class_member() {
-        if let Ok((rest, result)) = parse_class_member(&vec![Char('a'), Char('b')]) {
-            assert_eq!(false, rest.is_empty());
-            assert_eq!(result, vec![Ch('a')]);
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_class_member(&vec![Char('a'), Char('b')]).expect("Failure with parsing char"); 
+        assert_eq!(rest, vec![Char('b')]);
+        assert_eq!(result, vec![Ch('a')]);
         
-        if let Ok((rest, result)) = parse_class_member(&vec![Char('A'), Operator('-'), Char('Z')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, vec![Range('A', 'Z')]);
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_class_member(&vec![Char('A'), Operator('-'), Char('Z')]).expect("Failure with parsing range");
+        assert_eq!(rest.is_empty(), true);
+        assert_eq!(result, vec![Range('A', 'Z')]);
     }
     
     #[test]
     fn test_parse_character_class() {
-        if let Ok((rest, result)) = parse_character_class(vec![Char('a'), Char('b')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, CharClass(vec![Ch('a'), Ch('b')]));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_character_class(vec![Char('a'), Char('b')]).expect("Failure with char");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, CharClass(vec![Ch('a'), Ch('b')]));
         
-        if let Ok((rest, result)) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z')]).expect("Failure with range");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
         
-        if let Ok((rest, result)) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z')]).expect("Failure with multiple ranges");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
     }
     
     #[test]
     fn test_parse_atom() {
-        if let Ok((rest, result)) = parse_atom(vec![Char('a'), Char('b')]) {
-            assert_eq!(rest, vec![Char('b')]);
-            assert_eq!(result, AtomCh('a'));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_atom(vec![Char('a'), Char('b')]).expect("Failure parsing Char atom"); 
+        assert_eq!(rest, vec![Char('b')]);
+        assert_eq!(result, AtomCh('a'));
         
-        if let Ok((rest, result)) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare]).expect("Failure parsing character class");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
         
-        if let Ok((rest, result)) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare]).expect("Failure parsing character class with multiple ranges"); 
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
     }
 
     #[test]
     fn test_parse_term() {
-        if let Ok((rest, result)) = parse_term(&vec![Char('a'), Char('b')]) {
-            assert_eq!(rest, vec![Char('b')]);
-            assert_eq!(result, TAtom(AtomCh('a')));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_term(&vec![Char('a'), Char('b')]).expect("Failure parsing character term");
+        assert_eq!(rest, vec![Char('b')]);
+        assert_eq!(result, TAtom(AtomCh('a')));
         
-        if let Ok((rest, result)) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare, Operator('+')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, TOp(Plus(CharClass(vec![Range('A', 'Z')]))));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare, Operator('+')]).expect("Failure parsing term with plus operator");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, TOp(Plus(CharClass(vec![Range('A', 'Z')]))));
         
-        if let Ok((rest, result)) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare, Operator('?')]) {
-            assert_eq!(true, rest.is_empty());
-            assert_eq!(result, TOp(Question(CharClass(vec![Range('A', 'Z'), Range('a', 'z')]))));
-        } else {
-            assert!(false);
-        }
+        let (rest, result) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare, Operator('?')]).expect("Failure parsing term with question operator");
+        assert_eq!(true, rest.is_empty());
+        assert_eq!(result, TOp(Question(CharClass(vec![Range('A', 'Z'), Range('a', 'z')]))));
     }
     
     #[test]
     fn test_parse() {
-        if let Ok(lexed) = lex(&String::from("yee+t")) {
-            if let Ok(result) = parse(lexed) {
-                assert_eq!(result, vec![TAtom(AtomCh('y')), TAtom(AtomCh('e')), TOp(Plus(AtomCh('e'))), TAtom(AtomCh('t'))]);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
+        let lexed = lex(&String::from("yee+t")).expect("Failure lexing string with plus operator");
+        let result = parse(lexed).expect("Failure parsing lexemes with plus operator");
+        assert_eq!(result, vec![TAtom(AtomCh('y')), TAtom(AtomCh('e')), TOp(Plus(AtomCh('e'))), TAtom(AtomCh('t'))]);
         
-        if let Ok(lexed) = lex(&String::from("(mailto:)?[\\w\\-\\.]+'[\\w\\-]+(.[A-Za-z]+)+")) {
-            if let Ok(result) = parse(lexed) {
-                assert_eq!(result, vec![TOp(Question(AtomExpr(vec![TAtom(AtomCh('m')), TAtom(AtomCh('a')), TAtom(AtomCh('i')), TAtom(AtomCh('l')), TAtom(AtomCh('t')), TAtom(AtomCh('o')), TAtom(AtomCh(':'))]))), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-'), Range('!', '~')]))), TAtom(AtomCh('\'')), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-')]))), TOp(Plus(AtomExpr(vec![TAtom(AtomCh('.')), TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))])))]);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
+        let lexed = lex(&String::from("(mailto:)?[\\w\\-\\.]+'[\\w\\-]+(.[A-Za-z]+)+")).expect("Failure lexing string with subexpression"); 
+        let result = parse(lexed).expect("Failure parsing lexemes with subexpression");
+        assert_eq!(result, vec![TOp(Question(AtomExpr(vec![TAtom(AtomCh('m')), TAtom(AtomCh('a')), TAtom(AtomCh('i')), TAtom(AtomCh('l')), TAtom(AtomCh('t')), TAtom(AtomCh('o')), TAtom(AtomCh(':'))]))), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-'), Range('!', '~')]))), TAtom(AtomCh('\'')), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-')]))), TOp(Plus(AtomExpr(vec![TAtom(AtomCh('.')), TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))])))]);
     }
 }
