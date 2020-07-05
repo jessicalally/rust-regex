@@ -1,2 +1,2 @@
 # rust-regex
-A regex compiler written in Rust
+A learning project for Rust, creating a regular expression matcher.
