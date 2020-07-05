@@ -30,12 +30,12 @@ pub enum Operation {
   Invert(Atom)
 }
 
-fn parse_range(c : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
+fn parse_range(lower : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
     if let Some((_, rest)) = lexemes.split_first() {
         if let Some((ch, rest)) = rest.split_first() {
             match ch {
-                Char(d) => Ok((rest.to_vec(), Range(c, *d))),
-                _       => Err("invalid token syntax"),
+                Char(upper) => Ok((rest.to_vec(), Range(lower, *upper))),
+                _           => Err("invalid token syntax"),
             }
 
         } else {
@@ -85,14 +85,9 @@ fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom),
     while let Some(first) = tokens.first() {
         match first {
             RSquare => {
-                match tokens.split_first() {
-                    Some((_, rest)) => {
-                        tokens = rest.to_vec();
-                        break;
-                    }
-                    // since we know RSquare is the first token this should never be reached
-                    None => break,
-                }
+                let (_, rest) = tokens.split_first().expect("RSquare should be first token");
+                tokens = rest.to_vec();
+                break;
             }
             _       => {
                 let (rest, mut member) = parse_class_member(&tokens)?; 
