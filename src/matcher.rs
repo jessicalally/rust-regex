@@ -130,10 +130,8 @@ pub fn find(expr : &Expr, s : &str) -> Option<(String, u32)> {
 
 #[cfg(test)]
 mod matcher_tests {
-
+    
     use crate::matcher::*;
-    use crate::parser::*;
-    use crate::lexer::*;
     
     #[test]
     fn test_match_character() {

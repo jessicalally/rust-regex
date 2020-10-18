@@ -1,5 +1,5 @@
 ### Rust ###
 
 # Created by Cargo #
-regex/target/
-regex/Cargo.lock 
+target/
+Cargo.lock 
