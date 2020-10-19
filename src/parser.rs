@@ -1,4 +1,4 @@
-use self::{Atom::*, ClassMember::*, Operation::*, Term::*};
+use self::{Atom::*, ClassMember::*, Quantifier::*, Term::*};
 use crate::lexer::{Lexemes, Lexemes::*};
 use std::iter::Peekable;
 use std::slice::Iter;
@@ -8,7 +8,7 @@ pub type Expr = Vec<Term>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum Term {
     TAtom(Atom),
-    TOp(Operation),
+    TOp(Quantifier),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -22,10 +22,11 @@ pub enum Atom {
 pub enum ClassMember {
     Ch(char),
     Range(char, char),
+    Caret(Box<[ClassMember]>)
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Operation {
+pub enum Quantifier {
     Plus(Atom),
     Star(Atom),
     Question(Atom),
@@ -50,6 +51,18 @@ fn parse_meta_characters(
             class_members.push(Range('0', '9'));
         }
         'd' => class_members.push(Range('0', '9')),
+        'B' => class_members.push(Caret(Box::new([Ch('\n')]))),
+        'S' => class_members.push(Caret(Box::new([
+            Ch(' '),
+            Ch('\t')
+        ]))),
+        'W' => class_members.push(Caret(Box::new([
+            Ch('_'),
+            Range('a', 'z'),
+            Range('A', 'Z'),
+            Range('0', '9')
+        ]))),
+        'D' => class_members.push(Caret(Box::new([Range('0', '9')]))),
         _ => return Err("Invalid meta character"),
     }
 
@@ -119,7 +132,7 @@ fn parse_atom(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'stati
 
 fn parse_quantifier<'a>(
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
-) -> Result<Box<dyn Fn(Atom) -> Operation + 'a>, &'static str> {
+) -> Result<Box<dyn Fn(Atom) -> Quantifier + 'a>, &'static str> {
     // PRE: the next lexeme is an quantifier
     match lexemes.next().unwrap() {
         Quantifier('+') => Ok(Box::new(Plus)),

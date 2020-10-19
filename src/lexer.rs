@@ -1,8 +1,7 @@
 use self::Lexemes::*;
 use std::str::Chars;
 
-const META_CHARS: &str = ".wbds";
-const INVERTED_META_CHARS: &str = "WBDS";
+const META_CHARS: &str = ".wbdsWBDS";
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Lexemes {
@@ -50,9 +49,6 @@ fn lex_class(regex: &mut Chars, lexemes: &mut Vec<Lexemes>) -> Result<(), &'stat
                 if let Some((_, c)) = char_iter.next() {
                     if META_CHARS.contains(c) {
                         lexemes.push(Meta(c));
-                    } else if INVERTED_META_CHARS.contains(c) {
-                        lexemes.push(Meta(c.to_ascii_lowercase()));
-                        lexemes.push(Quantifier('^'));
                     } else {
                         lexemes.push(Char(c));
                     }
@@ -95,9 +91,6 @@ pub fn lex(regex: &str) -> Result<Vec<Lexemes>, &'static str> {
                 Some(c) => {
                     if META_CHARS.contains(c) {
                         lexemes.push(Meta(c));
-                    } else if INVERTED_META_CHARS.contains(c) {
-                        lexemes.push(Meta(c.to_ascii_lowercase()));
-                        lexemes.push(Quantifier('^'));
                     } else {
                         lexemes.push(Char(c));
                     }

@@ -1,4 +1,4 @@
-use crate::parser::{Atom, Atom::*, ClassMember, ClassMember::*, Operation::*, Term, Term::*};
+use crate::parser::{Atom, Atom::*, ClassMember, ClassMember::*, Quantifier::*, Term, Term::*};
 
 fn split_first(s: &str) -> Option<(String, String)> {
     Some((s.chars().next()?.to_string(), s[1..].to_string()))
@@ -10,6 +10,30 @@ fn match_character(regex_c: char, s: &str) -> Option<(String, String)> {
     }
 
     None
+}
+
+fn match_inverted_character_class(members: &[ClassMember], s: &str) -> Option<(String, String)> {
+    for member in members {
+        match member {
+            Ch(regex_c) => {
+                if *regex_c == s.chars().next()? {
+                    return None;
+                }
+            }
+
+            Range(lower, upper) => {
+                let input_c = s.chars().next()?;
+
+                if input_c >= *lower && input_c <= *upper {
+                    return None;
+                }
+            }
+
+            _ => panic!("Cannot have a doubly inverted character class")
+        }
+    }
+
+    split_first(s)
 }
 
 fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, String)> {
@@ -25,6 +49,11 @@ fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, St
 
                 if input_c >= *lower && input_c <= *upper {
                     return split_first(s);
+                }
+            }
+            Caret(inverted_members) => {
+                if let Some(result) = match_inverted_character_class(inverted_members, s) {
+                    return Some(result);
                 }
             }
         }
