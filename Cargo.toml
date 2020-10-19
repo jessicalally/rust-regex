@@ -1,5 +1,5 @@
 [package]
-name = "regular_expressions"
+name = "rust-regex"
 version = "0.1.0"
 authors = ["jessicalally <jessica.lally19@imperial.ac.uk>"]
 edition = "2018"
