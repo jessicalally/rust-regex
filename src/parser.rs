@@ -27,7 +27,7 @@ pub enum ClassMember {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operation {
     Plus(Atom),
-    Multiply(Atom),
+    Star(Atom),
     Question(Atom),
     Invert(Atom),
 }
@@ -56,7 +56,7 @@ fn parse_meta_characters(
     Ok(())
 }
 
-fn parse_range<'a>(
+fn parse_range(
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
     class_members: &mut Vec<ClassMember>,
 ) -> Result<(), &'static str> {
@@ -70,24 +70,22 @@ fn parse_range<'a>(
     Err("Invalid range expression")
 }
 
-fn parse_class_member<'a>(
+fn parse_class_member(
     lexeme: &Lexemes,
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
     class_members: &mut Vec<ClassMember>,
 ) -> Result<(), &'static str> {
     match lexeme {
-        Operator('-') => parse_range(lexemes, class_members)?,
+        Quantifier('-') => parse_range(lexemes, class_members)?,
         Char(c) => class_members.push(Ch(*c)),
         Meta(c) => parse_meta_characters(*c, class_members)?,
         _ => return Err("Invalid class member"),
     }
 
-    return Ok(());
+    Ok(())
 }
 
-fn parse_character_class<'a>(
-    lexemes: &mut Peekable<Iter<'_, Lexemes>>,
-) -> Result<Atom, &'static str> {
+fn parse_character_class(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
     let mut class_members = Vec::new();
 
     while let Some(lexeme) = lexemes.next() {
@@ -100,7 +98,7 @@ fn parse_character_class<'a>(
     Err("Character class does not contain a closing bracket")
 }
 
-fn parse_atom<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
+fn parse_atom(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
     if let Some(lexeme) = lexemes.next() {
         match lexeme {
             LSquare => return parse_character_class(lexemes),
@@ -111,7 +109,7 @@ fn parse_atom<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'s
                 parse_meta_characters(*c, &mut members)?;
                 return Ok(CharClass(members));
             }
-            Operator(_) => return Err("An operator must be preceeded by another atom"),
+            Quantifier(_) => return Err("An quantifier must be preceeded by another atom"),
             _ => return Err("Lexeme is not an atom"),
         };
     }
@@ -119,31 +117,31 @@ fn parse_atom<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'s
     Err("No lexemes present")
 }
 
-fn parse_operation<'a>(
+fn parse_quantifier<'a>(
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
 ) -> Result<Box<dyn Fn(Atom) -> Operation + 'a>, &'static str> {
-    // PRE: the next lexeme is an operator
+    // PRE: the next lexeme is an quantifier
     match lexemes.next().unwrap() {
-        Operator('+') => Ok(Box::new(|x| Plus(x))),
-        Operator('*') => Ok(Box::new(|x| Multiply(x))),
-        Operator('?') => Ok(Box::new(|x| Question(x))),
-        Operator('^') => Ok(Box::new(|x| Invert(x))),
-        _ => Err("Lexeme is not an operation"),
+        Quantifier('+') => Ok(Box::new(Plus)),
+        Quantifier('*') => Ok(Box::new(Star)),
+        Quantifier('?') => Ok(Box::new(Question)),
+        Quantifier('^') => Ok(Box::new(Invert)),
+        _ => Err("Lexeme is not an quantifier"),
     }
 }
 
-fn parse_term<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Term, &'static str> {
+fn parse_term(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Term, &'static str> {
     let atom = parse_atom(lexemes)?;
 
-    if let Some(Operator(_)) = lexemes.peek() {
-        let op = parse_operation(lexemes)?;
+    if let Some(Quantifier(_)) = lexemes.peek() {
+        let op = parse_quantifier(lexemes)?;
         return Ok(TOp(op(atom)));
     }
 
     Ok(TAtom(atom))
 }
 
-fn parse_expression<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Expr, &'static str> {
+fn parse_expression(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Expr, &'static str> {
     let mut expr: Vec<Term> = Vec::new();
 
     while let Some(lexeme) = lexemes.peek() {
@@ -159,7 +157,7 @@ fn parse_expression<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Exp
     Ok(expr)
 }
 
-pub fn parse(lexemes: &Vec<Lexemes>) -> Result<Expr, &'static str> {
+pub fn parse(lexemes: &[Lexemes]) -> Result<Expr, &'static str> {
     let mut lexeme_iter = lexemes.iter().peekable();
     let expr = parse_expression(&mut lexeme_iter)?;
 
@@ -189,7 +187,7 @@ mod parser_tests {
         let mut class_members = vec![];
         parse_class_member(
             &Char('A'),
-            &mut vec![Operator('-'), Char('Z')].iter().peekable(),
+            &mut vec![Quantifier('-'), Char('Z')].iter().peekable(),
             &mut class_members,
         )
         .expect("Failure with parsing range");
@@ -204,7 +202,7 @@ mod parser_tests {
         assert_eq!(result, CharClass(vec![Ch('a'), Ch('b')]));
 
         let result = parse_character_class(
-            &mut vec![Char('A'), Operator('-'), Char('Z'), RSquare]
+            &mut vec![Char('A'), Quantifier('-'), Char('Z'), RSquare]
                 .iter()
                 .peekable(),
         )
@@ -214,10 +212,10 @@ mod parser_tests {
         let result = parse_character_class(
             &mut vec![
                 Char('A'),
-                Operator('-'),
+                Quantifier('-'),
                 Char('Z'),
                 Char('a'),
-                Operator('-'),
+                Quantifier('-'),
                 Char('z'),
                 RSquare,
             ]
@@ -235,7 +233,7 @@ mod parser_tests {
         assert_eq!(result, AtomCh('a'));
 
         let result = parse_atom(
-            &mut vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare]
+            &mut vec![LSquare, Char('A'), Quantifier('-'), Char('Z'), RSquare]
                 .iter()
                 .peekable(),
         )
@@ -246,10 +244,10 @@ mod parser_tests {
             &mut vec![
                 LSquare,
                 Char('A'),
-                Operator('-'),
+                Quantifier('-'),
                 Char('Z'),
                 Char('a'),
-                Operator('-'),
+                Quantifier('-'),
                 Char('z'),
                 RSquare,
             ]
@@ -270,28 +268,28 @@ mod parser_tests {
         let lexemes = vec![
             LSquare,
             Char('A'),
-            Operator('-'),
+            Quantifier('-'),
             Char('Z'),
             RSquare,
-            Operator('+'),
+            Quantifier('+'),
         ];
         let result = parse_term(&mut lexemes.iter().peekable())
-            .expect("Failure parsing term with plus operator");
+            .expect("Failure parsing term with plus quantifier");
         assert_eq!(result, TOp(Plus(CharClass(vec![Range('A', 'Z')]))));
 
         let lexemes = vec![
             LSquare,
             Char('A'),
-            Operator('-'),
+            Quantifier('-'),
             Char('Z'),
             Char('a'),
-            Operator('-'),
+            Quantifier('-'),
             Char('z'),
             RSquare,
-            Operator('?'),
+            Quantifier('?'),
         ];
         let result = parse_term(&mut lexemes.iter().peekable())
-            .expect("Failure parsing term with question operator");
+            .expect("Failure parsing term with question quantifier");
         assert_eq!(
             result,
             TOp(Question(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))
@@ -301,8 +299,8 @@ mod parser_tests {
     #[test]
     fn test_parse() {
         let mut lexemes =
-            lex(&String::from("yee+t")).expect("Failure lexing string with plus operator");
-        let result = parse(&mut lexemes).expect("Failure parsing lexemes with plus operator");
+            lex(&String::from("yee+t")).expect("Failure lexing string with plus quantifier");
+        let result = parse(&mut lexemes).expect("Failure parsing lexemes with plus quantifier");
         assert_eq!(
             result,
             vec![

@@ -1,6 +1,4 @@
-use crate::parser::{
-    Atom, Atom::*, ClassMember, ClassMember::*, Operation::*, Term, Term::*,
-};
+use crate::parser::{Atom, Atom::*, ClassMember, ClassMember::*, Operation::*, Term, Term::*};
 
 fn split_first(s: &str) -> Option<(String, String)> {
     Some((s.chars().next()?.to_string(), s[1..].to_string()))
@@ -14,7 +12,7 @@ fn match_character(regex_c: char, s: &str) -> Option<(String, String)> {
     None
 }
 
-fn match_character_class(members: &Vec<ClassMember>, s: &str) -> Option<(String, String)> {
+fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, String)> {
     for member in members {
         match member {
             Ch(regex_c) => {
@@ -26,13 +24,13 @@ fn match_character_class(members: &Vec<ClassMember>, s: &str) -> Option<(String,
                 let input_c = s.chars().next()?;
 
                 if input_c >= *lower && input_c <= *upper {
-                   return split_first(s);
+                    return split_first(s);
                 }
             }
         }
     }
 
-    None        
+    None
 }
 
 fn match_atom(atom: &Atom, s: &str) -> Option<(String, String)> {
@@ -46,25 +44,24 @@ fn match_atom(atom: &Atom, s: &str) -> Option<(String, String)> {
 fn match_quantifier(atom: &Atom, acc: &str, s: &str) -> Option<(String, String)> {
     let mut acc = String::from(acc);
     let mut rest = String::from(s);
-    
+
     while let Some((next_match, remaining)) = match_atom(&atom, &rest) {
         acc = format!("{}{}", acc, next_match);
         rest = remaining;
     }
 
-    return Some((acc, rest))
+    Some((acc, rest))
 }
 
 /// Matches one or more successive occurences of the atom
 fn match_plus(atom: &Atom, s: &str) -> Option<(String, String)> {
     let (str_matched, rest) = match_atom(&atom, s)?;
-
-    return match_quantifier(atom, &str_matched, &rest);
+    match_quantifier(atom, &str_matched, &rest)
 }
 
 /// Matches zero or more successive occurences of the atom
 fn match_star(atom: &Atom, s: &str) -> Option<(String, String)> {
-    return match_quantifier(atom, "", s);
+    match_quantifier(atom, "", s)
 }
 
 /// Matches zero or one successive occurences of the atom
@@ -78,11 +75,9 @@ fn match_invert(atom: &Atom, s: &str) -> Option<(String, String)> {
     match atom {
         CharClass(members) => match match_character_class(members, s) {
             Some(_) => None,
-            None => {
-                Some((s.chars().next().unwrap().to_string(), s[1..].to_string()))
-            }
-        }
-        _ => return None,
+            None => Some((s.chars().next().unwrap().to_string(), s[1..].to_string())),
+        },
+        _ => None,
     }
 }
 
@@ -102,7 +97,7 @@ fn match_expression(expr: &[Term], s: &str) -> Option<(String, String)> {
             let (matched, rest) = acc?;
             let (next_matched, rest) = match_term(x, &rest)?;
             Some((format!("{}{}", matched, next_matched), rest))
-    })
+        })
 }
 
 fn matcher(expr: &[Term], s: &str) -> Option<String> {
@@ -184,13 +179,11 @@ mod matcher_tests {
 
         assert_eq!(match_plus(&AtomCh('a'), ""), None);
 
-        let (matched, rest) =
-            match_star(&AtomCh('a'), "").expect("Failure with Star operation");
+        let (matched, rest) = match_star(&AtomCh('a'), "").expect("Failure with Star operation");
         assert_eq!(matched, String::from(""));
         assert_eq!(rest, String::from(""));
 
-        let (matched, rest) =
-            match_star(&AtomCh('a'), "aaa").expect("Failure with Star operation");
+        let (matched, rest) = match_star(&AtomCh('a'), "aaa").expect("Failure with Star operation");
         assert_eq!(matched, String::from("aaa"));
         assert_eq!(rest, String::from(""));
 
@@ -257,8 +250,8 @@ mod matcher_tests {
         assert_eq!(matched, String::from(""));
         assert_eq!(rest, String::from(""));
 
-        let (matched, rest) = match_term(&TOp(Star(AtomCh('a'))), "aaa")
-            .expect("Failure with Star operation");
+        let (matched, rest) =
+            match_term(&TOp(Star(AtomCh('a'))), "aaa").expect("Failure with Star operation");
         assert_eq!(matched, String::from("aaa"));
         assert_eq!(rest, String::from(""));
 
