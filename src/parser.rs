@@ -1,12 +1,14 @@
+use self::{Atom::*, ClassMember::*, Operation::*, Term::*};
 use crate::lexer::{Lexemes, Lexemes::*};
-use crate::parser::{ClassMember::*, Atom::*, Operation::*, Node::*};
+use std::iter::Peekable;
+use std::slice::Iter;
 
-pub type Expr = Vec<Node>;
+pub type Expr = Vec<Term>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Node {
+pub enum Term {
     TAtom(Atom),
-    TOp(Operation)
+    TOp(Operation),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -19,258 +21,336 @@ pub enum Atom {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ClassMember {
     Ch(char),
-    Range(char, char)
+    Range(char, char),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operation {
-  Plus(Atom),
-  Multiply(Atom),
-  Question(Atom),
-  Invert(Atom)
+    Plus(Atom),
+    Multiply(Atom),
+    Question(Atom),
+    Invert(Atom),
 }
 
-fn parse_range(lower : char, lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, ClassMember), &'static str> {
-    if let Some((_, rest)) = lexemes.split_first() {
-        if let Some((ch, rest)) = rest.split_first() {
-            match ch {
-                Char(upper) => Ok((rest.to_vec(), Range(lower, *upper))),
-                _           => Err("invalid token syntax"),
-            }
-
-        } else {
-            Err("invalid token syntax")
+fn parse_meta_characters(
+    c: char,
+    class_members: &mut Vec<ClassMember>,
+) -> Result<(), &'static str> {
+    match c {
+        '.' => class_members.push(Range('!', '~')),
+        'b' => class_members.push(Ch('\n')),
+        's' => {
+            class_members.push(Ch(' '));
+            class_members.push(Ch('\t'));
         }
-    
-    } else {
-        Err("invalid token syntax")
-    }
-}
-
-fn parse_class_member(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Vec<ClassMember>), &'static str> {
-    if let Some((first, rest)) = lexemes.split_first() {
-        match first {
-            Char(c) => {
-                match lexemes.get(1) {
-                    // character is part of a range
-                    Some(Operator('-')) => {
-                        let (rest, member) = parse_range(*c, rest.to_vec())?;
-                        return Ok((rest.to_vec(), vec![member]));
-                    }
-                    _ => Ok((rest.to_vec(), vec![Ch(*c)])),
-                }
-            }
-            
-            Meta(c) => {
-                match c {
-                    '.' => Ok((rest.to_vec(), vec![Range('!', '~')])), 
-                    'b' => Ok((rest.to_vec(), vec![Ch('\n')])),
-                    's' => Ok((rest.to_vec(), vec![Ch(' '), Ch('\t')])),
-                    'w' => Ok((rest.to_vec(), vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9')])),
-                    'd' => Ok((rest.to_vec(), vec![Range('0', '9')])),
-                     _  => Err("Invalid meta character"),
-                }
-            }
-            _       => Err("Invalid class member"),
+        'w' => {
+            class_members.push(Ch('_'));
+            class_members.push(Range('a', 'z'));
+            class_members.push(Range('A', 'Z'));
+            class_members.push(Range('0', '9'));
         }
-    } else {
-        Err("Lexemes are empty")
+        'd' => class_members.push(Range('0', '9')),
+        _ => return Err("Invalid meta character"),
     }
+
+    Ok(())
 }
 
-fn parse_character_class(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
-    let mut ch_class = Vec::new();
-    let mut tokens = lexemes;
-
-    while let Some(first) = tokens.first() {
-        match first {
-            RSquare => {
-                let (_, rest) = tokens.split_first().expect("RSquare should be first token");
-                tokens = rest.to_vec();
-                break;
-            }
-            _       => {
-                let (rest, mut member) = parse_class_member(&tokens)?; 
-                ch_class.append(&mut member);
-                tokens = rest;        
-            }
+fn parse_range<'a>(
+    lexemes: &mut Peekable<Iter<'_, Lexemes>>,
+    class_members: &mut Vec<ClassMember>,
+) -> Result<(), &'static str> {
+    if let Some(Ch(lower)) = class_members.pop() {
+        if let Some(Char(upper)) = lexemes.next() {
+            class_members.push(Range(lower, *upper));
+            return Ok(());
         }
     }
-    
-    Ok((tokens, CharClass(ch_class)))
+
+    Err("Invalid range expression")
 }
 
+fn parse_class_member<'a>(
+    lexeme: &Lexemes,
+    lexemes: &mut Peekable<Iter<'_, Lexemes>>,
+    class_members: &mut Vec<ClassMember>,
+) -> Result<(), &'static str> {
+    match lexeme {
+        Operator('-') => parse_range(lexemes, class_members)?,
+        Char(c) => class_members.push(Ch(*c)),
+        Meta(c) => parse_meta_characters(*c, class_members)?,
+        _ => return Err("Invalid class member"),
+    }
 
-fn parse_atom(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Atom), &'static str> {
-    if let Some((lexeme, rest)) = lexemes.split_first() {
+    return Ok(());
+}
+
+fn parse_character_class<'a>(
+    lexemes: &mut Peekable<Iter<'_, Lexemes>>,
+) -> Result<Atom, &'static str> {
+    let mut class_members = Vec::new();
+
+    while let Some(lexeme) = lexemes.next() {
         match lexeme {
-            LSquare => parse_character_class(rest.to_vec()),
-            LRound  => {
-                let (rest, expr) = parse_expression(rest.to_vec())?;
-                Ok((rest, AtomExpr(expr)))
-            }
-            Char(c) => Ok((rest.to_vec(), AtomCh(*c))),
+            RSquare => return Ok(CharClass(class_members)),
+            _ => parse_class_member(lexeme, lexemes, &mut class_members)?,
+        }
+    }
+
+    Err("Character class does not contain a closing bracket")
+}
+
+fn parse_atom<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
+    if let Some(lexeme) = lexemes.next() {
+        match lexeme {
+            LSquare => return parse_character_class(lexemes),
+            LRound => return Ok(AtomExpr(parse_expression(lexemes)?)),
+            Char(c) => return Ok(AtomCh(*c)),
             Meta(c) => {
-                match c {
-                    '.' => Ok((rest.to_vec(), CharClass(vec![Range('!', '~')]))), 
-                    'b' => Ok((rest.to_vec(), CharClass(vec![Ch('\n')]))),
-                    's' => Ok((rest.to_vec(), CharClass(vec![Ch(' '), Ch('\t')]))),
-                    'w' => Ok((rest.to_vec(), CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9')]))),
-                    'd' => Ok((rest.to_vec(), CharClass(vec![Range('0', '9')]))),
-                     _  => Err("Invalid meta character"),
-                }
+                let mut members = Vec::new();
+                parse_meta_characters(*c, &mut members)?;
+                return Ok(CharClass(members));
             }
-            _       => Err("Lexeme is not an atom"),
-        }
-    } else {
-        Err("No lexemes present")
+            Operator(_) => return Err("An operator must be preceeded by another atom"),
+            _ => return Err("Lexeme is not an atom"),
+        };
+    }
+
+    Err("No lexemes present")
+}
+
+fn parse_operation<'a>(
+    lexemes: &mut Peekable<Iter<'_, Lexemes>>,
+) -> Result<Box<dyn Fn(Atom) -> Operation + 'a>, &'static str> {
+    // PRE: the next lexeme is an operator
+    match lexemes.next().unwrap() {
+        Operator('+') => Ok(Box::new(|x| Plus(x))),
+        Operator('*') => Ok(Box::new(|x| Multiply(x))),
+        Operator('?') => Ok(Box::new(|x| Question(x))),
+        Operator('^') => Ok(Box::new(|x| Invert(x))),
+        _ => Err("Lexeme is not an operation"),
     }
 }
 
-fn parse_operation<'a>(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Box<dyn Fn(Atom) -> Operation + 'a>), &'static str> {
-    if let Some((first, rest)) = lexemes.split_first() {
-        match first {
-            Operator('+') => Ok((rest.to_vec(), Box::new(|x| Plus(x)))),
-            Operator('*') => Ok((rest.to_vec(), Box::new(|x| Multiply(x)))),
-            Operator('?') => Ok((rest.to_vec(), Box::new(|x| Question(x)))),
-            Operator('^') => Ok((rest.to_vec(), Box::new(|x| Invert(x)))),
-            _ => Err("Lexeme is not an operation"),
-        }
-    } else {
-        Err("Error parsing operation")
+fn parse_term<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Term, &'static str> {
+    let atom = parse_atom(lexemes)?;
+
+    if let Some(Operator(_)) = lexemes.peek() {
+        let op = parse_operation(lexemes)?;
+        return Ok(TOp(op(atom)));
     }
+
+    Ok(TAtom(atom))
 }
 
+fn parse_expression<'a>(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Expr, &'static str> {
+    let mut expr: Vec<Term> = Vec::new();
 
-fn parse_term(lexemes : &Vec<Lexemes>) -> Result<(Vec<Lexemes>, Node), &'static str> {
-    match lexemes.first() {
-        Some(Operator(_)) => Err("No atom before Operator"),
-        
-        Some(_) => {
-            let (rest, atom) = parse_atom(lexemes.to_vec())?;
-            match rest.first() {
-                Some(Operator(_)) => {
-                    let (rest, op) = parse_operation(rest)?;
-                    Ok((rest, TOp(op(atom))))
-                }
-                _ => Ok((rest, TAtom(atom))),
-            }
-        }
-        
-        None => Err("No lexemes present"),
-    }
-}
-
-fn parse_expression(lexemes : Vec<Lexemes>) -> Result<(Vec<Lexemes>, Expr), &'static str> {
-    let mut expr = Vec::new();
-    let mut tokens = lexemes;
-    let mut invalid = false;
-
-    while let Some(lexeme) = tokens.first() {
+    while let Some(lexeme) = lexemes.peek() {
         match lexeme {
             RRound => {
-                if let Some((_, rest)) = tokens.split_first() {
-                    tokens = rest.to_vec();
-                    break;
-                } else {
-                    invalid = true;
-                    break;
-                }
+                lexemes.next();
+                return Ok(expr);
             }
-            _ => {
-                let (rest, node) = parse_term(&tokens)?;
-                expr.push(node);
-                tokens = rest.to_vec();
-            }
+            _ => expr.push(parse_term(lexemes)?),
         }
     }
 
-    if invalid {
-        Err("Error processing lexemes")
-    } else {
-        Ok((tokens, expr))
-    }
+    Ok(expr)
 }
 
+pub fn parse(lexemes: &Vec<Lexemes>) -> Result<Expr, &'static str> {
+    let mut lexeme_iter = lexemes.iter().peekable();
+    let expr = parse_expression(&mut lexeme_iter)?;
 
-pub fn parse(lexemes : Vec<Lexemes>) -> Result<Expr, &'static str> {
-    let (rest, expr) = parse_expression(lexemes)?;
-    if rest.is_empty() {
-        Ok(expr)
-    } else {
-        Err("Lexemes left over")
+    if lexeme_iter.next().is_none() {
+        return Ok(expr);
     }
+
+    Err("Invalid regex expression")
 }
 
 #[cfg(test)]
-mod parser_tests {    
-    use crate::parser::*;
+mod parser_tests {
     use crate::lexer::lex;
-    
+    use crate::parser::*;
+
     #[test]
     fn test_parse_class_member() {
-        let (rest, result) = parse_class_member(&vec![Char('a'), Char('b')]).expect("Failure with parsing char"); 
-        assert_eq!(rest, vec![Char('b')]);
-        assert_eq!(result, vec![Ch('a')]);
-        
-        let (rest, result) = parse_class_member(&vec![Char('A'), Operator('-'), Char('Z')]).expect("Failure with parsing range");
-        assert_eq!(rest.is_empty(), true);
-        assert_eq!(result, vec![Range('A', 'Z')]);
+        let mut class_members = vec![];
+        parse_class_member(
+            &Char('a'),
+            &mut vec![].iter().peekable(),
+            &mut class_members,
+        )
+        .expect("Failure with parsing char");
+        assert_eq!(class_members, vec![Ch('a')]);
+
+        let mut class_members = vec![];
+        parse_class_member(
+            &Char('A'),
+            &mut vec![Operator('-'), Char('Z')].iter().peekable(),
+            &mut class_members,
+        )
+        .expect("Failure with parsing range");
+        assert_eq!(class_members, vec![Ch('A')]);
     }
-    
+
     #[test]
     fn test_parse_character_class() {
-        let (rest, result) = parse_character_class(vec![Char('a'), Char('b')]).expect("Failure with char");
-        assert_eq!(true, rest.is_empty());
+        let result =
+            parse_character_class(&mut vec![Char('a'), Char('b'), RSquare].iter().peekable())
+                .expect("Failure with char");
         assert_eq!(result, CharClass(vec![Ch('a'), Ch('b')]));
-        
-        let (rest, result) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z')]).expect("Failure with range");
-        assert_eq!(true, rest.is_empty());
+
+        let result = parse_character_class(
+            &mut vec![Char('A'), Operator('-'), Char('Z'), RSquare]
+                .iter()
+                .peekable(),
+        )
+        .expect("Failure with range");
         assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
-        
-        let (rest, result) = parse_character_class(vec![Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z')]).expect("Failure with multiple ranges");
-        assert_eq!(true, rest.is_empty());
+
+        let result = parse_character_class(
+            &mut vec![
+                Char('A'),
+                Operator('-'),
+                Char('Z'),
+                Char('a'),
+                Operator('-'),
+                Char('z'),
+                RSquare,
+            ]
+            .iter()
+            .peekable(),
+        )
+        .expect("Failure with multiple ranges");
         assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
     }
-    
+
     #[test]
     fn test_parse_atom() {
-        let (rest, result) = parse_atom(vec![Char('a'), Char('b')]).expect("Failure parsing Char atom"); 
-        assert_eq!(rest, vec![Char('b')]);
+        let result = parse_atom(&mut vec![Char('a'), Char('b')].iter().peekable())
+            .expect("Failure parsing Char atom");
         assert_eq!(result, AtomCh('a'));
-        
-        let (rest, result) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare]).expect("Failure parsing character class");
-        assert_eq!(true, rest.is_empty());
+
+        let result = parse_atom(
+            &mut vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare]
+                .iter()
+                .peekable(),
+        )
+        .expect("Failure parsing character class");
         assert_eq!(result, CharClass(vec![Range('A', 'Z')]));
-        
-        let (rest, result) = parse_atom(vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare]).expect("Failure parsing character class with multiple ranges"); 
-        assert_eq!(true, rest.is_empty());
+
+        let result = parse_atom(
+            &mut vec![
+                LSquare,
+                Char('A'),
+                Operator('-'),
+                Char('Z'),
+                Char('a'),
+                Operator('-'),
+                Char('z'),
+                RSquare,
+            ]
+            .iter()
+            .peekable(),
+        )
+        .expect("Failure parsing character class with multiple ranges");
         assert_eq!(result, CharClass(vec![Range('A', 'Z'), Range('a', 'z')]));
     }
 
     #[test]
     fn test_parse_term() {
-        let (rest, result) = parse_term(&vec![Char('a'), Char('b')]).expect("Failure parsing character term");
-        assert_eq!(rest, vec![Char('b')]);
+        let lexemes = vec![Char('a'), Char('b')];
+        let result =
+            parse_term(&mut lexemes.iter().peekable()).expect("Failure parsing character term");
         assert_eq!(result, TAtom(AtomCh('a')));
-        
-        let (rest, result) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), RSquare, Operator('+')]).expect("Failure parsing term with plus operator");
-        assert_eq!(true, rest.is_empty());
+
+        let lexemes = vec![
+            LSquare,
+            Char('A'),
+            Operator('-'),
+            Char('Z'),
+            RSquare,
+            Operator('+'),
+        ];
+        let result = parse_term(&mut lexemes.iter().peekable())
+            .expect("Failure parsing term with plus operator");
         assert_eq!(result, TOp(Plus(CharClass(vec![Range('A', 'Z')]))));
-        
-        let (rest, result) = parse_term(&vec![LSquare, Char('A'), Operator('-'), Char('Z'), Char('a'), Operator('-'), Char('z'), RSquare, Operator('?')]).expect("Failure parsing term with question operator");
-        assert_eq!(true, rest.is_empty());
-        assert_eq!(result, TOp(Question(CharClass(vec![Range('A', 'Z'), Range('a', 'z')]))));
+
+        let lexemes = vec![
+            LSquare,
+            Char('A'),
+            Operator('-'),
+            Char('Z'),
+            Char('a'),
+            Operator('-'),
+            Char('z'),
+            RSquare,
+            Operator('?'),
+        ];
+        let result = parse_term(&mut lexemes.iter().peekable())
+            .expect("Failure parsing term with question operator");
+        assert_eq!(
+            result,
+            TOp(Question(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))
+        );
     }
-    
+
     #[test]
     fn test_parse() {
-        let lexed = lex(&String::from("yee+t")).expect("Failure lexing string with plus operator");
-        let result = parse(lexed).expect("Failure parsing lexemes with plus operator");
-        assert_eq!(result, vec![TAtom(AtomCh('y')), TAtom(AtomCh('e')), TOp(Plus(AtomCh('e'))), TAtom(AtomCh('t'))]);
-        
-        let lexed = lex(&String::from("(mailto:)?[\\w\\-\\.]+'[\\w\\-]+(.[A-Za-z]+)+")).expect("Failure lexing string with subexpression"); 
-        let result = parse(lexed).expect("Failure parsing lexemes with subexpression");
-        assert_eq!(result, vec![TOp(Question(AtomExpr(vec![TAtom(AtomCh('m')), TAtom(AtomCh('a')), TAtom(AtomCh('i')), TAtom(AtomCh('l')), TAtom(AtomCh('t')), TAtom(AtomCh('o')), TAtom(AtomCh(':'))]))), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-'), Range('!', '~')]))), TAtom(AtomCh('\'')), TOp(Plus(CharClass(vec![Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9'), Ch('-')]))), TOp(Plus(AtomExpr(vec![TAtom(AtomCh('.')), TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))])))]);
+        let mut lexemes =
+            lex(&String::from("yee+t")).expect("Failure lexing string with plus operator");
+        let result = parse(&mut lexemes).expect("Failure parsing lexemes with plus operator");
+        assert_eq!(
+            result,
+            vec![
+                TAtom(AtomCh('y')),
+                TAtom(AtomCh('e')),
+                TOp(Plus(AtomCh('e'))),
+                TAtom(AtomCh('t'))
+            ]
+        );
+
+        let mut lexemes = lex(&String::from(
+            "(mailto:)?[\\w\\-\\.]+'[\\w\\-]+(.[A-Za-z]+)+",
+        ))
+        .expect("Failure lexing string with subexpression");
+        let result = parse(&mut lexemes).expect("Failure parsing lexemes with subexpression");
+        assert_eq!(
+            result,
+            vec![
+                TOp(Question(AtomExpr(vec![
+                    TAtom(AtomCh('m')),
+                    TAtom(AtomCh('a')),
+                    TAtom(AtomCh('i')),
+                    TAtom(AtomCh('l')),
+                    TAtom(AtomCh('t')),
+                    TAtom(AtomCh('o')),
+                    TAtom(AtomCh(':'))
+                ]))),
+                TOp(Plus(CharClass(vec![
+                    Ch('_'),
+                    Range('a', 'z'),
+                    Range('A', 'Z'),
+                    Range('0', '9'),
+                    Ch('-'),
+                    Range('!', '~')
+                ]))),
+                TAtom(AtomCh('\'')),
+                TOp(Plus(CharClass(vec![
+                    Ch('_'),
+                    Range('a', 'z'),
+                    Range('A', 'Z'),
+                    Range('0', '9'),
+                    Ch('-')
+                ]))),
+                TOp(Plus(AtomExpr(vec![
+                    TAtom(AtomCh('.')),
+                    TOp(Plus(CharClass(vec![Range('A', 'Z'), Range('a', 'z')])))
+                ])))
+            ]
+        );
     }
 }
