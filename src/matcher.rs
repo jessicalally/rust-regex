@@ -75,8 +75,13 @@ fn match_atom(atom: &Atom, s: &str) -> Option<(String, String)> {
 fn match_quantifier(atom: &Atom, acc: &str, s: &str) -> Option<(String, String)> {
     let mut acc = String::from(acc);
     let mut rest = String::from(s);
-
     while let Some((next_match, remaining)) = match_atom(&atom, &rest) {
+        // If the atom is equivalent to an empty expression, e.g. ()?, the function
+        // will always return next_match = "", which result in an infinite loop
+        if next_match.is_empty() {
+            return Some((acc, rest));
+        }
+
         acc = format!("{}{}", acc, next_match);
         rest = remaining;
     }
