@@ -1,7 +1,8 @@
 use self::Lexemes::*;
 use std::str::Chars;
 
-const META_CHARS: &str = ".wbdsWBDS";
+const META_CHARS: &str = ".wbds";
+const ALL_META_CHARS: &str = ".wbdsWBDS";
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Lexemes {
@@ -89,7 +90,7 @@ pub fn lex(regex: &str) -> Result<Vec<Lexemes>, &'static str> {
             ')' => lexemes.push(RRound),
             '\\' => match char_iter.next() {
                 Some(c) => {
-                    if META_CHARS.contains(c) {
+                    if ALL_META_CHARS.contains(c) {
                         lexemes.push(Meta(c));
                     } else {
                         lexemes.push(Char(c));

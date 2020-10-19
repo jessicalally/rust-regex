@@ -29,7 +29,7 @@ fn match_inverted_character_class(members: &[ClassMember], s: &str) -> Option<(S
                 }
             }
 
-            _ => panic!("Cannot have a doubly inverted character class")
+            Caret(_) => panic!("Cannot have a doubly inverted character class"),
         }
     }
 
@@ -44,6 +44,7 @@ fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, St
                     return split_first(s);
                 }
             }
+
             Range(lower, upper) => {
                 let input_c = s.chars().next()?;
 
@@ -51,6 +52,7 @@ fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, St
                     return split_first(s);
                 }
             }
+
             Caret(inverted_members) => {
                 if let Some(result) = match_inverted_character_class(inverted_members, s) {
                     return Some(result);

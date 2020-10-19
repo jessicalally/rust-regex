@@ -22,7 +22,7 @@ pub enum Atom {
 pub enum ClassMember {
     Ch(char),
     Range(char, char),
-    Caret(Box<[ClassMember]>)
+    Caret(Box<[ClassMember]>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,15 +52,12 @@ fn parse_meta_characters(
         }
         'd' => class_members.push(Range('0', '9')),
         'B' => class_members.push(Caret(Box::new([Ch('\n')]))),
-        'S' => class_members.push(Caret(Box::new([
-            Ch(' '),
-            Ch('\t')
-        ]))),
+        'S' => class_members.push(Caret(Box::new([Ch(' '), Ch('\t')]))),
         'W' => class_members.push(Caret(Box::new([
             Ch('_'),
             Range('a', 'z'),
             Range('A', 'Z'),
-            Range('0', '9')
+            Range('0', '9'),
         ]))),
         'D' => class_members.push(Caret(Box::new([Range('0', '9')]))),
         _ => return Err("Invalid meta character"),
@@ -103,7 +100,14 @@ fn parse_character_class(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<At
 
     while let Some(lexeme) = lexemes.next() {
         match lexeme {
-            RSquare => return Ok(CharClass(class_members)),
+            RSquare => {
+                if let Some(Quantifier('^')) = lexemes.peek() {
+                    lexemes.next();
+                    return Ok(CharClass(vec![Caret(class_members.into_boxed_slice())]));
+                }
+
+                return Ok(CharClass(class_members));
+            }
             _ => parse_class_member(lexeme, lexemes, &mut class_members)?,
         }
     }

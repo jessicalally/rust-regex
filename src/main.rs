@@ -1,7 +1,7 @@
-use std::env;
 use rust_regex::lexer::lex;
-use rust_regex::parser::parse;
 use rust_regex::matcher::find;
+use rust_regex::parser::parse;
+use std::env;
 
 fn main() -> Result<(), &'static str> {
     let args: Vec<String> = env::args().collect();
