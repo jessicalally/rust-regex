@@ -33,32 +33,35 @@ pub enum Quantifier {
     Invert(Atom),
 }
 
+const ASCII_MIN: char = ' ';
+const ASCII_MAX: char = '~';
+const WORD_CHARS: [ClassMember; 4] = [Ch('_'), Range('a', 'z'), Range('A', 'Z'), Range('0', '9')];
+
+/// Parses a single meta-character, converting it to ASCII characters
+///
+/// # Arguments
+///
+/// * 'c': the meta-character
+/// * 'class_members': a mutable vector that contains all the parsed members of the current character class
 fn parse_meta_characters(
     c: char,
     class_members: &mut Vec<ClassMember>,
 ) -> Result<(), &'static str> {
     match c {
-        '.' => class_members.push(Range('!', '~')),
+        '.' => {
+            class_members.push(Ch('\t'));
+            class_members.push(Range(ASCII_MIN, ASCII_MAX));
+        }
         'b' => class_members.push(Ch('\n')),
         's' => {
             class_members.push(Ch(' '));
             class_members.push(Ch('\t'));
         }
-        'w' => {
-            class_members.push(Ch('_'));
-            class_members.push(Range('a', 'z'));
-            class_members.push(Range('A', 'Z'));
-            class_members.push(Range('0', '9'));
-        }
+        'w' => class_members.append(&mut WORD_CHARS.to_vec()),
         'd' => class_members.push(Range('0', '9')),
         'B' => class_members.push(Caret(Box::new([Ch('\n')]))),
         'S' => class_members.push(Caret(Box::new([Ch(' '), Ch('\t')]))),
-        'W' => class_members.push(Caret(Box::new([
-            Ch('_'),
-            Range('a', 'z'),
-            Range('A', 'Z'),
-            Range('0', '9'),
-        ]))),
+        'W' => class_members.push(Caret(Box::new(WORD_CHARS))),
         'D' => class_members.push(Caret(Box::new([Range('0', '9')]))),
         _ => return Err("Invalid meta character"),
     }
@@ -66,6 +69,12 @@ fn parse_meta_characters(
     Ok(())
 }
 
+/// Parses a range of characters
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
+/// * 'class_members': a mutable vector that contains all the parsed members of the current character class
 fn parse_range(
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
     class_members: &mut Vec<ClassMember>,
@@ -80,6 +89,13 @@ fn parse_range(
     Err("Invalid range expression")
 }
 
+/// Parses a single member of a character class
+///
+/// # Arguments
+///
+/// * 'lexeme': the current lexemes being parsed
+/// * 'lexemes': an iterator through the regex lexemes
+/// * 'class_members': a mutable vector that contains all the parsed members of the current character class
 fn parse_class_member(
     lexeme: &Lexemes,
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
@@ -95,6 +111,11 @@ fn parse_class_member(
     Ok(())
 }
 
+/// Parses a character class
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
 fn parse_character_class(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
     let mut class_members = Vec::new();
 
@@ -115,6 +136,11 @@ fn parse_character_class(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<At
     Err("Character class does not contain a closing bracket")
 }
 
+/// Parses an atom of the regex string, e.g. a character, meta-character, or square bracket
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
 fn parse_atom(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'static str> {
     if let Some(lexeme) = lexemes.next() {
         match lexeme {
@@ -134,6 +160,11 @@ fn parse_atom(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Atom, &'stati
     Err("No lexemes present")
 }
 
+/// Parses a regex quantifier, e.g. +, *, ? or ^
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
 fn parse_quantifier<'a>(
     lexemes: &mut Peekable<Iter<'_, Lexemes>>,
 ) -> Result<Box<dyn Fn(Atom) -> Quantifier + 'a>, &'static str> {
@@ -147,6 +178,11 @@ fn parse_quantifier<'a>(
     }
 }
 
+/// Parses a regex term, which may be either an atom, or an atom with a quantifier  
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
 fn parse_term(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Term, &'static str> {
     let atom = parse_atom(lexemes)?;
 
@@ -158,6 +194,11 @@ fn parse_term(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Term, &'stati
     Ok(TAtom(atom))
 }
 
+/// Parses a regex expression
+///
+/// # Arguments
+///
+/// * 'lexemes': an iterator through the regex lexemes
 fn parse_expression(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Expr, &'static str> {
     let mut expr: Vec<Term> = Vec::new();
 
@@ -174,6 +215,11 @@ fn parse_expression(lexemes: &mut Peekable<Iter<'_, Lexemes>>) -> Result<Expr, &
     Ok(expr)
 }
 
+/// Parses the whole lexed regex pattern
+///
+/// # Arguments
+///
+/// * 'lexemes': a slice that contains all the lexemes of the regex pattern
 pub fn parse(lexemes: &[Lexemes]) -> Result<Expr, &'static str> {
     let mut lexeme_iter = lexemes.iter().peekable();
     let expr = parse_expression(&mut lexeme_iter)?;

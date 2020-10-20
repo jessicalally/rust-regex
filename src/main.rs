@@ -6,8 +6,11 @@ use std::env;
 fn main() -> Result<(), &'static str> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        panic!("Error: too few arguments\nUsage: ./rust-regex regex_pattern input_string");
+    if args.len() < 3 {
+        panic!(
+            "Error: too few arguments\nUsage: {} regex_pattern input_string",
+            args[0]
+        );
     }
 
     let pattern = &args[1];

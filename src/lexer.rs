@@ -19,7 +19,9 @@ pub enum Lexemes {
 /// are the closing bracket ], the backslash \, the caret ^, and the hyphen -.
 /// If we have a caret that is not the first character in a character class, it should be treated as a regular
 /// character.
+///
 /// # Arguments
+///
 /// * regex - A string slice holding the regex string
 fn lex_class(regex: &mut Chars, lexemes: &mut Vec<Lexemes>) -> Result<(), &'static str> {
     let mut char_iter = regex.enumerate();
@@ -46,6 +48,10 @@ fn lex_class(regex: &mut Chars, lexemes: &mut Vec<Lexemes>) -> Result<(), &'stat
                 return Ok(());
             }
 
+            // If the escaped character is contained in the META_CHARS string,
+            // it pushes the character as a Meta(c) lexeme, otherwise it is
+            // treated as a normal character. Negated meta-characters are
+            // treated as normal characters inside character classes
             '\\' => {
                 if let Some((_, c)) = char_iter.next() {
                     if META_CHARS.contains(c) {
@@ -64,9 +70,10 @@ fn lex_class(regex: &mut Chars, lexemes: &mut Vec<Lexemes>) -> Result<(), &'stat
     Err("Invalid character class")
 }
 
-/// Lexes the inputted regex string
+/// Lexes the regex string given as input
 ///
 /// # Arguments
+///
 /// * 'regex' - A string slice holding the regex string
 pub fn lex(regex: &str) -> Result<Vec<Lexemes>, &'static str> {
     let mut lexemes = Vec::new();
@@ -88,6 +95,10 @@ pub fn lex(regex: &str) -> Result<Vec<Lexemes>, &'static str> {
             '+' | '*' | '?' | '-' => lexemes.push(Quantifier(c)),
             '(' => lexemes.push(LRound),
             ')' => lexemes.push(RRound),
+
+            // If the escaped character is contained in the META_CHARS string,
+            // it pushes the character as a Meta(c) lexeme, otherwise it is
+            // treated as a normal character
             '\\' => match char_iter.next() {
                 Some(c) => {
                     if ALL_META_CHARS.contains(c) {

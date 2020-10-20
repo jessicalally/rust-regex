@@ -1,9 +1,20 @@
 use crate::parser::{Atom, Atom::*, ClassMember, ClassMember::*, Quantifier::*, Term, Term::*};
 
+/// Splits a string into its first character and remainder
+///
+/// # Arguments
+///
+/// * 's': the string to be split
 fn split_first(s: &str) -> Option<(String, String)> {
     Some((s.chars().next()?.to_string(), s[1..].to_string()))
 }
 
+/// Attempts to match the first character of the input string against a single regex character
+///
+/// # Arguments
+///
+/// * 'regex_c': the character contained in a regex oattern
+/// * 's': the input string to be matched against
 fn match_character(regex_c: char, s: &str) -> Option<(String, String)> {
     if regex_c == s.chars().next()? {
         return split_first(s);
@@ -12,6 +23,12 @@ fn match_character(regex_c: char, s: &str) -> Option<(String, String)> {
     None
 }
 
+/// Matches any character which is not contained in the character class (i.e. the inverted character class)
+///
+/// # Arguments
+///
+/// * 'members': a slice of the members of the character class
+/// * 's': the input string to be matched against
 fn match_inverted_character_class(members: &[ClassMember], s: &str) -> Option<(String, String)> {
     for member in members {
         match member {
@@ -36,6 +53,12 @@ fn match_inverted_character_class(members: &[ClassMember], s: &str) -> Option<(S
     split_first(s)
 }
 
+/// Matches any character which is contained in the character class
+///
+/// # Arguments
+///
+/// * 'members': a slice of the members of the character class
+/// * 's': the input string to be matched against
 fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, String)> {
     for member in members {
         match member {
@@ -64,6 +87,12 @@ fn match_character_class(members: &[ClassMember], s: &str) -> Option<(String, St
     None
 }
 
+/// Matches the first character of the input string against a regex atom
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 's': the input string to be matched against
 fn match_atom(atom: &Atom, s: &str) -> Option<(String, String)> {
     match atom {
         AtomExpr(expr) => match_expression(expr, s),
@@ -72,12 +101,20 @@ fn match_atom(atom: &Atom, s: &str) -> Option<(String, String)> {
     }
 }
 
+/// Matches a regex atom which has a quantifier associated with it
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 'acc': a slice of the input string which has currently been matched
+/// * 's': the input string to be matched against
 fn match_quantifier(atom: &Atom, acc: &str, s: &str) -> Option<(String, String)> {
     let mut acc = String::from(acc);
     let mut rest = String::from(s);
     while let Some((next_match, remaining)) = match_atom(&atom, &rest) {
         // If the atom is equivalent to an empty expression, e.g. ()?, the function
-        // will always return next_match = "", which result in an infinite loop
+        // will always return next_match = "", which result in an infinite loop, hence
+        // we need to break if the matched string is empty
         if next_match.is_empty() {
             return Some((acc, rest));
         }
@@ -89,25 +126,46 @@ fn match_quantifier(atom: &Atom, acc: &str, s: &str) -> Option<(String, String)>
     Some((acc, rest))
 }
 
-/// Matches one or more successive occurences of the atom
+/// Matches one or more successive occurences of a regex atom
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 's': the input string to be matched against
 fn match_plus(atom: &Atom, s: &str) -> Option<(String, String)> {
     let (str_matched, rest) = match_atom(&atom, s)?;
     match_quantifier(atom, &str_matched, &rest)
 }
 
 /// Matches zero or more successive occurences of the atom
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 's': the input string to be matched against
 fn match_star(atom: &Atom, s: &str) -> Option<(String, String)> {
     match_quantifier(atom, "", s)
 }
 
 /// Matches zero or one successive occurences of the atom
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 's': the input string to be matched against
 fn match_question(atom: &Atom, s: &str) -> Option<(String, String)> {
     Some(match_atom(&atom, s).unwrap_or((String::from(""), s.to_string())))
 }
 
-/// Matches of if character is not contained in the character class
+/// Matches if the character is not contained in the character class
+///
+/// PRE: atom is a CharacterClass
+///
+/// # Arguments
+///
+/// * 'atom': the regex atom to match
+/// * 's': the input string to be matched against
 fn match_invert(atom: &Atom, s: &str) -> Option<(String, String)> {
-    // pre: atom is a CharacterClass
     match atom {
         CharClass(members) => match match_character_class(members, s) {
             Some(_) => None,
@@ -117,6 +175,12 @@ fn match_invert(atom: &Atom, s: &str) -> Option<(String, String)> {
     }
 }
 
+/// Matches a single term of the regex string
+///
+/// # Arguments
+///
+/// * 'term': the regex term to match
+/// * 's': the input string to be matched against
 fn match_term(term: &Term, s: &str) -> Option<(String, String)> {
     match term {
         TAtom(atom) => match_atom(&atom, s),
@@ -127,6 +191,12 @@ fn match_term(term: &Term, s: &str) -> Option<(String, String)> {
     }
 }
 
+/// Matches a regex expression against the input string
+///
+/// # Arguments
+///
+/// * 'expr': a slice of regex terms to match
+/// * 's': the input string to be matched against
 fn match_expression(expr: &[Term], s: &str) -> Option<(String, String)> {
     expr.iter()
         .fold(Some((String::new(), s.to_string())), |acc, x| {
@@ -136,10 +206,24 @@ fn match_expression(expr: &[Term], s: &str) -> Option<(String, String)> {
         })
 }
 
+/// Matches a regex expression against the input string, dropping any
+/// characters which have not been matched
+///
+/// # Arguments
+///
+/// * 'expr': a slice of regex terms to match
+/// * 's': the input string to be matched against
 fn matcher(expr: &[Term], s: &str) -> Option<String> {
     Some(match_expression(expr, s)?.0)
 }
 
+/// Attempts to find a regex expression in the input string, returning the
+/// matched string and its starting index or None if the regex pattern cannot be found
+///
+/// # Arguments
+///
+/// * 'expr': a slice of regex terms to match
+/// * 's': the input string to be matched against
 pub fn find(expr: &[Term], s: &str) -> Option<(String, u32)> {
     for i in 0..s.len() {
         if let Some(matched) = matcher(&expr, &s[i..]) {
