@@ -25,6 +25,9 @@ cargo run "[\w]+@[\w.]+" "jml19@ic.ac.uk"             // returns Some(("jml19@ic
 cargo run "(Hello )?World" "Goodbye World"            // returns Some(("World", 8))
 cargo run "[3-7]+" "0123456789"                       // returns Some(("34567", 3))
 cargo run "[^3-7]+" "0123456789"                      // returns Some(("012", 0))
+cargo run "0x[0-9A-F]+" "0x123456FF"                  // returns Some(("0x123456FF", 0))
+cargo run "\W+" "221B Baker Street"                   // returns Some((" ", 4))
+cargo run "[\d]+" "$%^&*()"                           // returns None
 ```
 
 ## Current Features
